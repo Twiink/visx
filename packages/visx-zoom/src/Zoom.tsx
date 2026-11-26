@@ -140,11 +140,9 @@ function Zoom<ElementType extends Element>({
 
   const setTransformMatrix = useCallback(
     (newTransformMatrix: TransformMatrix) => {
-      setTransformMatrixState((prevTransformMatrix) => {
-        const updatedTransformMatrix = defaultConstrain(newTransformMatrix, prevTransformMatrix);
-        matrixStateRef.current = updatedTransformMatrix;
-        return updatedTransformMatrix;
-      });
+      const updatedTransformMatrix = defaultConstrain(newTransformMatrix, matrixStateRef.current);
+      matrixStateRef.current = updatedTransformMatrix;
+      setTransformMatrixState(updatedTransformMatrix);
     },
     [defaultConstrain],
   );
@@ -187,30 +185,33 @@ function Zoom<ElementType extends Element>({
 
   const translate = useCallback(
     ({ translateX, translateY }: Translate) => {
-      const nextMatrix = composeMatrices(transformMatrix, translateMatrix(translateX, translateY));
+      const nextMatrix = composeMatrices(
+        matrixStateRef.current,
+        translateMatrix(translateX, translateY),
+      );
       setTransformMatrix(nextMatrix);
     },
-    [setTransformMatrix, transformMatrix],
+    [setTransformMatrix],
   );
 
   const setTranslate = useCallback(
     ({ translateX, translateY }: Translate) => {
       const nextMatrix = {
-        ...transformMatrix,
+        ...matrixStateRef.current,
         translateX,
         translateY,
       };
       setTransformMatrix(nextMatrix);
     },
-    [setTransformMatrix, transformMatrix],
+    [setTransformMatrix],
   );
 
   const translateTo = useCallback(
     ({ x, y }: Point) => {
-      const point = applyInverseMatrixToPoint(transformMatrix, { x, y });
+      const point = applyInverseMatrixToPoint(matrixStateRef.current, { x, y });
       setTranslate({ translateX: point.x, translateY: point.y });
     },
-    [setTranslate, transformMatrix],
+    [setTranslate],
   );
 
   const invert = useCallback(() => inverseMatrix(transformMatrix), [transformMatrix]);
@@ -220,15 +221,12 @@ function Zoom<ElementType extends Element>({
     return `matrix(${scaleX}, ${skewY}, ${skewX}, ${scaleY}, ${translateX}, ${translateY})`;
   }, [invert]);
 
-  const dragStart = useCallback(
-    (event: InteractionEvent) => {
-      const { translateX, translateY } = transformMatrix;
-      setStartPoint(localPoint(event) || undefined);
-      setStartTranslate({ translateX, translateY });
-      setIsDragging(true);
-    },
-    [transformMatrix],
-  );
+  const dragStart = useCallback((event: InteractionEvent) => {
+    const { translateX, translateY } = matrixStateRef.current;
+    setStartPoint(localPoint(event) || undefined);
+    setStartTranslate({ translateX, translateY });
+    setIsDragging(true);
+  }, []);
 
   const dragMove = useCallback(
     (event: InteractionEvent, options?: { offsetX?: number; offsetY?: number }) => {
@@ -296,12 +294,12 @@ function Zoom<ElementType extends Element>({
 
   const center = useCallback(() => {
     const centerPoint = { x: width / 2, y: height / 2 };
-    const inverseCentroid = applyInverseToPoint(centerPoint);
+    const inverseCentroid = applyInverseMatrixToPoint(matrixStateRef.current, centerPoint);
     translate({
       translateX: inverseCentroid.x - centerPoint.x,
       translateY: inverseCentroid.y - centerPoint.y,
     });
-  }, [height, width, applyInverseToPoint, translate]);
+  }, [height, width, translate]);
 
   const clear = useCallback(() => {
     setTransformMatrix(identityMatrix());
